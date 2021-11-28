@@ -1,0 +1,93 @@
+---
+title: "EDA-NBA"
+author: "Franky Zhang"
+date: "11/3/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+library(magrittr)
+```
+
+```{r}
+players_2020 <- read.csv("NBA_2020_Players.csv", header = TRUE)
+
+# wrangling box score data 
+box_score_2020 <- read.csv("NBA_2020_Box_Score.csv", header = TRUE) 
+box_score_2019 <- read.csv("NBA_2019_Box_Score.csv", header = TRUE) 
+box_score_2018 <- read.csv("NBA_2018_Box_Score.csv", header = TRUE) 
+box_score_2017 <- read.csv("NBA_2017_Box_Score.csv", header = TRUE) 
+box_score      <- rbind(box_score_2020, box_score_2019, box_score_2018, box_score_2017)
+
+box_score[is.na(box_score)] <- 0
+# box_score %>% count(Playoff_Round)
+box_score <- box_score[which(box_score$Playoff_Round == "Non-Playoff"), ] # only calculate non-Playoff games(Q: what about Playoff games?)
+box_score$Played <- ifelse(box_score$Played == "TRUE", 1, 0)
+
+# when compute average, only counting the game played
+box_score_played <- box_score[which(box_score$Played != 0), ]
+
+# compute the average box data
+player_score <- box_score_played %>% group_by(Player_Id_Str) %>%
+  summarise(Minutes            = round(mean(Minutes)           , digits = 1), 
+            FG_Made            = round(mean(FG_Made)           , digits = 1), 
+            FG_Att             = round(mean(FG_Att)            , digits = 1), 
+            Threes_Made        = round(mean(Threes_Made)       , digits = 1), 
+            Threes_Att         = round(mean(Threes_Att)        , digits = 1), 
+            FT_Made            = round(mean(FT_Made)           , digits = 1), 
+            FT_Att             = round(mean(FT_Att)            , digits = 1), 
+            Offensive_Rebounds = round(mean(Offensive_Rebounds), digits = 1), 
+            Defensive_Rebounds = round(mean(Defensive_Rebounds), digits = 1), 
+            Rebounds           = round(mean(Rebounds)          , digits = 1), 
+            Assists            = round(mean(Assists)           , digits = 1), 
+            Steals             = round(mean(Steals)            , digits = 1), 
+            Blocks             = round(mean(Blocks)            , digits = 1), 
+            Turnovers          = round(mean(Turnovers)         , digits = 1), 
+            Fouls              = round(mean(Turnovers)         , digits = 1), 
+            Plus_Minus         = round(mean(Plus_Minus)        , digits = 1), 
+            Points             = round(mean(Points)            , digits = 1)) 
+# count average appearance(4 seasons)
+player_appearance <- box_score %>% group_by(Player_Id_Str) %>% 
+  summarise(Appearance = (sum(Played)/4))
+player_score <- player_score %>% inner_join(player_appearance, by = "Player_Id_Str")
+
+# omit NA data in players_2020
+players_info <- players_2020 %>% arrange(desc(Salary)) %>% na.omit() %>%
+  dplyr::select("Player", "Player_Id_Str", "Position", "Short_Name", "Salary", "Height", "Weight", "Draft_Pick")
+
+# remove ' and . in players_info
+players_info$Player_Id_Str <- sub("\\.", "", players_info$Player_Id_Str, perl=TRUE)
+players_info$Player_Id_Str <- sub("'", "", players_info$Player_Id_Str, perl=TRUE)
+
+# test <- data.frame()
+# for(i in 1: length(players_info$Player_Id_Str)){
+#   # i = 1
+#   if(!is.element(players_info$Player_Id_Str[i], player_score_2020$Player_Id_Str)){
+#     test <- rbind(test, players_info[i, ])
+#   }
+# }
+# test
+
+# inner join the data
+NBA_data <- inner_join(player_score, players_info, by = "Player_Id_Str") # finally get 325 players 
+
+# compute FG percentage, Three percentage and FT percentage
+NBA_data <- NBA_data %>% mutate(FG_per     = round(FG_Made/FG_Att        , digits = 2), 
+                                Threes_per = round(Threes_Made/Threes_Att, digits = 2), 
+                                FT_per     = round(FT_Made/FT_Att        , digits = 2))
+NBA_data <- NBA_data %>% dplyr::select(Player_Id_Str, Short_Name, Position, Salary, Minutes, Appearance, 
+                                       FG_per, FG_Made, Threes_per, Threes_Made, FT_per, FT_Made, 
+                                       Rebounds, Assists, Steals, Blocks, Turnovers, Fouls, Height, Weight)
+colnames(NBA_data)[2] <- "Team"
+
+
+
+
+```
+
+
+
+
