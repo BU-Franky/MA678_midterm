@@ -1,18 +1,39 @@
 ---
-title: "EDA-NBA"
+title: "Untitled"
 author: "Franky Zhang"
-date: "11/3/2021"
-output: html_document
+date: "11/29/2021"
+output:
+  pdf_document: default
+  html_document: default
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+library(readr)
 library(tidyverse)
-library(dplyr)
+library(stringr)
+library(rstanarm)
+library(knitr)
 library(magrittr)
+library(kableExtra)
+library(gridExtra)
+library(lubridate)
+library(car) 
+library(lme4)
+library(arm)
+library(lmerTest)
+library(lattice)
+require(gridExtra)
+library(ggplot2)
 ```
 
-```{r}
+
+```{r include=FALSE}
+# data wrangling
 players_2021 <- read.csv("NBA_2021_Players.csv", header = TRUE)
 
 # wrangling box score data 
@@ -79,16 +100,54 @@ NBA_data <- inner_join(player_score, players_info, by = "Player_Id_Str") # final
 # compute FG percentage, Three percentage and FT percentage
 NBA_data <- NBA_data %>% mutate(FG_per     = round(FG_Made/FG_Att        , digits = 2), 
                                 Threes_per = round(Threes_Made/Threes_Att, digits = 2), 
-                                FT_per     = round(FT_Made/FT_Att        , digits = 2))
+                                FT_per     = round(FT_Made/FT_Att        , digits = 2), 
+                                Salary     = round(NBA_data$Salary / 1000000  , digits = 2))
 NBA_data <- NBA_data %>% dplyr::select(Player_Id_Str, Short_Name, Position, Salary, Minutes, Appearance, 
                                        Points, FG_per, FG_Made, Threes_per, Threes_Made, FT_per, FT_Made, 
                                        Rebounds, Assists, Steals, Blocks, Turnovers, Fouls, Height, Weight, Draft_Pick)
 colnames(NBA_data)[2] <- "Team"
 NBA_data <- NBA_data[-which(NBA_data$Team == "XXX"), ]
-NBA_data %>% count(Team)
-NBA_data %>% subset(Team == "BKN")
+NBA_data$Position1 <- ifelse((NBA_data$Position == "PF" | NBA_data$Position == "SF" | NBA_data$Position == "F"), "forward", ifelse((NBA_data$Position == "SG" | NBA_data$Position == "PG" | NBA_data$Position == "G"), "guard", "center"))
+# NBA_data %>% count(Position1)
+# NBA_data %>% count(Team)
+# NBA_data %>% subset(Team == "BKN")
 ```
 
+By aforementioned part, I've got  NBA_data with 314 observations and 21 variables, among which there is 1 output `salary` and 20 predictors. However, whether or not to use all of these 20 predictors is depended on following analysis.
 
+```{r echo=FALSE, fig.height=4, fig.width=10, fig.cap="relationship between salaries and points of players, in fig(a) different colors represenet different teams, in fig(b) different colors represent different positions."}
+team_sample <- sample(unique(NBA_data$Team), 10, replace = FALSE) # random sample 10 from 30 
 
+# points
+points_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
+  aes(x = log(Points + 1), y = log(Salary)) + 
+  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "(a) Salary vs Points", x = "log(average points)", y = "log(Salary)")
 
+points_by_position1 <- ggplot(data = NBA_data) + 
+  aes(x = log(Points + 1), y = log(Salary)) + 
+  geom_point(aes(color = Position1), size = .5) + 
+  geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "(b) Salary vs Points", x = "log(average points)", y = "log(Salary)") 
+grid.arrange(points_by_teams, points_by_position1, ncol = 2)
+```
+
+Figure 1 illustrates the relationship between salaries and average points, while fig(a) is in team level and fig(b) is in position level. However, whatever the level, salaries show the increasing trend as points going up. And in different teams and positions, the intercepts and slopes show slights differences. After I draw the graph of salaries versus appearance, rebounds, assists, steals and blocks, the figures are quite similar. Thus I put them in the appendix. 
+
+```{r echo=FALSE, fig.height=4, fig.width=10, fig.cap="relationship between salaries and turnovers of players."}
+# Turnovers - weird result
+Turnovers_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
+  aes(x = log(Turnovers + 1), y = log(Salary)) + 
+  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "(a)Salary vs Turnovers", x = "log(average Turnovers)", y = "log(Salary)")
+Turnovers_by_position1 <- ggplot(data = NBA_data) + 
+  aes(x = log(Turnovers + 1), y = log(Salary)) + 
+  geom_point(aes(color = Position1), size = .5) + 
+  geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "(b)Salary vs Turnovers", x = "log(average Turnovers)", y = "log(Salary)") 
+grid.arrange(Turnovers_by_teams, Turnovers_by_position1, ncol = 2)
+```
+
+Figure 2 shows the correlation between players' salaries and turnovers. Similarly, figure(a) is in team level while figure(b) is in postion level. The results is weird because turnover is absolutely a negative statistic on basketball court and no one would sign huge contract with players making over 10 turnovers per game! However, as only those most high-maintenance guards have the chance to make high turnover, merely look at number of turnovers is misleading. Thus, I decided to look into relationship between turnovers and assists. 

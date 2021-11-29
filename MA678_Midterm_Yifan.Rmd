@@ -1,0 +1,351 @@
+---
+title: "Report of MA678 Midterm Project"
+author: "Franky Zhang"
+date: "11/29/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	message = FALSE,
+	warning = FALSE
+)
+library(readr)
+library(tidyverse)
+library(stringr)
+library(rstanarm)
+library(knitr)
+library(magrittr)
+library(kableExtra)
+library(gridExtra)
+library(lubridate)
+library(car) 
+library(lme4)
+library(arm)
+library(lmerTest)
+library(lattice)
+require(gridExtra)
+library(ggplot2)
+```
+
+## Abstract
+
+The National Basketball Association (NBA) is a professional basketball league in North America, which is absolutely the premier men's professional basketball league in the world. However, in 2020-2021 season, the highest paid player is Golden States top star, Stephen Curry, who earned a salary over $43,000,000 while the lowest paid player's salary is around $150,000. Thus, here comes the problem: which kind of players is favored most in NBA currently or which kind of players can sign a big NBA contract. 
+
+## Introduction
+
+Usually, boxed score is important description of  performance of players(e.g. points, rebounds, assists and so on) and whether a player can sign a big contract is greatly decided by it. Nevertheless, different stages of NBA development seem to have different "most important" positions. For example, during a relatively long period, a truly dominant center could simply dominate the game, like Kareem Abdul-Jabbar and Wilt Chamberlain who could score almost ever time he touched the ball. Then, as Michael Jordan dominated 1990s and won 6 NBA championships, he undoubtedly led a wave of shooting guard. Recently, Warrior's Death lineup was too dominant that nearly the whole league was reorienting around to compete with Hampton Five. Thus, the combo guards with great offensive ability (e.g. Stephen Curry, James Harden, Russell Westbrook) or small forwards(e.g. Lebron James, Kevin Durant and Kawhi Leonard) are absolutely most favored in NBA and have the biggest chance to earn a fairly high salary. 
+On the other hand, the luxury tax threshold is $136,606 million and meanwhile, some teams are willing to take risk of paying high tax luxury to form a better lineup and chase championship while some teams not. It's natural to come to the conclusion that players in big franchise teams are more likely to receive higher salaries. That to say, team is another factor we should take into account.  
+Therefore, I decide to introduce multilevel models to find out the influences of fixed effects (e.g. points, rebounds, assists and so on) and random effects (teams, positions). 
+
+## Methods
+
+### Data Preprocessing
+
+I found the data set from a public github repository(https://github.com/MattC137/Open_Data/tree/master/Data/Sports/NBA). Firstly, I download 2017-2020 box score and 2021 players information because the players' 2021 salaries are greatly depended on their performances in recent years. Hence, I need to combine them and create the appropriate data frame. Additionally, as the box data is by individual games, after combining the data, I calculate average game statistics(non-Playoff games) for each player and transform `played` information to binary factor (0 or 1) then calculate average `appearances` for each player in non-Playoff games. Additionally, to avoid the bias that some players are labelled with f (forward) and g (guard) while some are labelled more specific with SF, PF, SG, PG, I combined the levels and used foward and guard identically. For the next step, I wiped out 'NA' data in players' information and merge it with aforementioned data frame. Up till now, I get full information of 314 players,which means 11 players for each team on average. Here is the glossary of terms: 
+
+| column names      | explanation                                     |
+| :--:              | :-----                                          |
+| Player_Id_Str     | Structured id name of player                    |
+| Team              | Team of player                                  |
+| Position          | Position of player(SF, PF, C, SG, PG)           |
+| Position1         | Position of player(forward, center, guard)      |
+| Salary            | Annual salary of player (dollars)               |
+| Minutes           | Average playing time of player (minutes)        |
+| Appearance        | Average appearance of player (times)            |
+| Points            | Average points of player                        |
+| FG_Made           | Average field goal made by player               |
+| FG_per            | Average field goal percentage of player         |
+| Threes_Made       | Average 3-point field goal made by player       |
+| Threes_pre        | Average 3-point field goal percentage of player |
+| FT_Made           | Average free throws made by player              |
+| FT_pre            | Average free throws percentage of player        |
+| Rebounds          | Average rebounds of player                      |
+| Assists           | Average assists of player                       |
+| Steals            | Average steals of player                        |
+| blocks            | Average blocks of player                        |
+| Turnovers         | Average turnovers of player                     |
+| Fouls             | Average fouls of player                         |
+| Height            | Height of player (foot)                         |
+| weight            | Weight of player (lb)                           |
+| Draft_Pick        | Draft pick of player                            |
+
+### Exploratory Data Analysis
+
+```{r include=FALSE}
+# data wrangling
+players_2021 <- read.csv("NBA_2021_Players.csv", header = TRUE)
+
+# wrangling box score data 
+box_score_2020 <- read.csv("NBA_2020_Box_Score.csv", header = TRUE) 
+box_score_2019 <- read.csv("NBA_2019_Box_Score.csv", header = TRUE) 
+box_score_2018 <- read.csv("NBA_2018_Box_Score.csv", header = TRUE) 
+box_score_2017 <- read.csv("NBA_2017_Box_Score.csv", header = TRUE) 
+box_score      <- rbind(box_score_2020, box_score_2019, box_score_2018, box_score_2017)
+
+box_score[is.na(box_score)] <- 0
+# box_score %>% count(Playoff_Round)
+box_score <- box_score[which(box_score$Playoff_Round == "Non-Playoff"), ] # only calculate non-Playoff games(Q: what about Playoff games?)
+box_score$Played <- ifelse(box_score$Played == "TRUE", 1, 0)
+
+# when compute average, only counting the game played
+box_score_played <- box_score[which(box_score$Played != 0), ]
+
+# compute the average box data
+player_score <- box_score_played %>% group_by(Player_Id_Str) %>%
+  summarise(Minutes            = round(mean(Minutes)           , digits = 1), 
+            FG_Made            = round(mean(FG_Made)           , digits = 1), 
+            FG_Att             = round(mean(FG_Att)            , digits = 1), 
+            Threes_Made        = round(mean(Threes_Made)       , digits = 1), 
+            Threes_Att         = round(mean(Threes_Att)        , digits = 1), 
+            FT_Made            = round(mean(FT_Made)           , digits = 1), 
+            FT_Att             = round(mean(FT_Att)            , digits = 1), 
+            Offensive_Rebounds = round(mean(Offensive_Rebounds), digits = 1), 
+            Defensive_Rebounds = round(mean(Defensive_Rebounds), digits = 1), 
+            Rebounds           = round(mean(Rebounds)          , digits = 1), 
+            Assists            = round(mean(Assists)           , digits = 1), 
+            Steals             = round(mean(Steals)            , digits = 1), 
+            Blocks             = round(mean(Blocks)            , digits = 1), 
+            Turnovers          = round(mean(Turnovers)         , digits = 1), 
+            Fouls              = round(mean(Turnovers)         , digits = 1), 
+            Plus_Minus         = round(mean(Plus_Minus)        , digits = 1), 
+            Points             = round(mean(Points)            , digits = 1)) 
+# count average appearance(4 seasons)
+player_appearance <- box_score %>% group_by(Player_Id_Str) %>% 
+  summarise(Appearance = (sum(Played)/4))
+player_score <- player_score %>% inner_join(player_appearance, by = "Player_Id_Str")
+
+# omit NA data in players_2020
+players_info <- players_2021 %>% arrange(desc(Salary)) %>% na.omit() %>%
+  dplyr::select("Player", "Player_Id_Str", "Position", "Short_Name", "Salary", "Height", "Weight", "Draft_Pick")
+
+# remove ' and . in players_info
+players_info$Player_Id_Str <- sub("\\.", "", players_info$Player_Id_Str, perl=TRUE)
+players_info$Player_Id_Str <- sub("\\.", "", players_info$Player_Id_Str, perl=TRUE)
+players_info$Player_Id_Str <- sub("'", "", players_info$Player_Id_Str, perl=TRUE)
+players_info$Player_Id_Str <- sub("'", "", players_info$Player_Id_Str, perl=TRUE)
+
+# test <- data.frame()
+# for(i in 1: length(players_info$Player_Id_Str)){
+#   # i = 1
+#   if(!is.element(players_info$Player_Id_Str[i], player_score$Player_Id_Str)){
+#     test <- rbind(test, players_info[i, ])
+#   }
+# }
+# test
+
+# inner join the data
+NBA_data <- inner_join(player_score, players_info, by = "Player_Id_Str") # finally get 314 players 
+
+# compute FG percentage, Three percentage and FT percentage
+NBA_data <- NBA_data %>% mutate(FG_per     = round(FG_Made/FG_Att        , digits = 2), 
+                                Threes_per = round(Threes_Made/Threes_Att, digits = 2), 
+                                FT_per     = round(FT_Made/FT_Att        , digits = 2), 
+                                Salary     = round(NBA_data$Salary / 1000000  , digits = 2))
+NBA_data <- NBA_data %>% dplyr::select(Player_Id_Str, Short_Name, Position, Salary, Minutes, Appearance, 
+                                       Points, FG_per, FG_Made, Threes_per, Threes_Made, FT_per, FT_Made, 
+                                       Rebounds, Assists, Steals, Blocks, Turnovers, Fouls, Height, Weight, Draft_Pick)
+colnames(NBA_data)[2] <- "Team"
+NBA_data <- NBA_data[-which(NBA_data$Team == "XXX"), ]
+NBA_data$Position1 <- ifelse((NBA_data$Position == "PF" | NBA_data$Position == "SF" | NBA_data$Position == "F"), "forward", ifelse((NBA_data$Position == "SG" | NBA_data$Position == "PG" | NBA_data$Position == "G"), "guard", "center"))
+# NBA_data %>% count(Position1)
+# NBA_data %>% count(Team)
+# NBA_data %>% subset(Team == "BKN")
+```
+
+
+By aforementioned part, I've got a `NBA_data` with 314 observations and 21 variables, among which there is 1 output `salary` and 20 predictors. However, whether or not to use all of these 20 predictors is depended on following analysis.
+
+```{r echo=FALSE, fig.height=3.5, fig.width=10, fig.cap="relationship between salaries and points of players"}
+team_sample <- sample(unique(NBA_data$Team), 10, replace = FALSE) # random sample 10 from 30 
+# points
+points_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
+  aes(x = log(Points + 1), y = log(Salary)) + 
+  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "(a) Salary vs Points", x = "log(average points)", y = "log(Salary)")
+
+points_by_position1 <- ggplot(data = NBA_data) + 
+  aes(x = log(Points + 1), y = log(Salary)) + 
+  geom_point(aes(color = Position1), size = .5) + 
+  geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "(b) Salary vs Points", x = "log(average points)", y = "log(Salary)") 
+grid.arrange(points_by_teams, points_by_position1, ncol = 2)
+```
+
+
+
+Figure 1 illustrates the relationship between salaries and average points, while fig(a) is in team level and fig(b) is in position level. However, whatever the level, salaries show the increasing trend as points going up. And in different teams and positions, the intercepts and slopes show slights differences. After I draw the graph of salaries versus appearance, rebounds, assists, steals and blocks, the figures are quite similar. Thus I put them in the appendix. 
+
+```{r echo=FALSE, fig.height=4, fig.width=10, fig.cap="relationship between salaries and turnovers of players."}
+# Turnovers - weird result
+Turnovers_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
+  aes(x = log(Turnovers + 1), y = log(Salary)) + 
+  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "(a) Salary vs Turnovers", x = "log(average Turnovers)", y = "log(Salary)")
+Turnovers_by_position1 <- ggplot(data = NBA_data) + 
+  aes(x = log(Turnovers + 1), y = log(Salary)) + 
+  geom_point(aes(color = Position1), size = .5) + 
+  geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "(b) Salary vs Turnovers", x = "log(average Turnovers)", y = "log(Salary)") 
+grid.arrange(Turnovers_by_teams, Turnovers_by_position1, ncol = 2)
+```
+
+Figure 2 shows the correlation between players' salaries and turnovers. Similarly, figure(a) is in team level while figure(b) is in postion level. The results is weird because turnover is absolutely a negative statistic on basketball court and no one would sign huge contract with players making over 10 turnovers per game! However, as only those most high-maintenance guards have the chance to make high turnover, merely look at number of turnovers is misleading. Thus, I decided to look into relationship between turnovers and assists. 
+
+```{r echo=FALSE, fig.height=4, fig.width=10, fig.cap="relationship between turnovers and assists of players"}
+ggplot(data = NBA_data) + 
+  aes(x = Assists, y = Turnovers) + 
+  geom_point() + 
+  geom_smooth(formula = 'y ~ x', method = "lm") + 
+  labs(titile = "Turnovers vs Assists", x = "number of assists", y = "number of turnovers")
+# cor(NBA_data$Turnovers, NBA_data$Assists, method = "pearson")
+# cor(NBA_data$Minutes, NBA_data$Fouls, method = "pearson")
+```
+
+Figure 3 verifies that players' turnovers are closely related with their assists while the later is obviously positive stats. What's more, the Pearson covariance between turnovers and assists is over .85! Thus, I decide to exclude variable `Turnovers`. Variable `Fouls` is similar situation that it is highly correlated with `Minutes`, which shows Pearson covariance stats over .75. And `Heights` and `Weights` is another pair of high correlated variables. Hence, I only kept variable `Heights`. 
+
+```{r echo=FALSE, fig.height=4, fig.width=10, fig.cap="relationship between salaries and draft picks of players"}
+# Draft_Pick
+Draft_Pick_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
+  aes(x = log(Draft_Pick + 1), y = log(Salary)) + 
+  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "(a) Salary vs Draft_Pick", x = "log(average Draft_Pick)", y = "log(Salary)")
+Draft_Pick_by_position1 <- ggplot(data = NBA_data) + 
+  aes(x = log(Draft_Pick + 1), y = log(Salary)) + 
+  geom_point(aes(color = Position1), size = .5) + 
+  geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "(b) Salary vs Draft_Pick", x = "log(average Draft_Pick)", y = "log(Salary)") 
+grid.arrange(Draft_Pick_by_teams, Draft_Pick_by_position1, ncol = 2)
+```
+
+## Appendix
+
+```{r include=FALSE}
+# Exploratory Data Analysis
+dist_Salary     <- ggplot(data = NBA_data) + geom_histogram(aes(Salary     ) , bins = 30)
+dist_Minutes    <- ggplot(data = NBA_data) + geom_histogram(aes(Minutes    ) , bins = 30)
+dist_Appearance <- ggplot(data = NBA_data) + geom_histogram(aes(Appearance ) , bins = 30)
+dist_Points     <- ggplot(data = NBA_data) + geom_histogram(aes(Points     ) , bins = 30)
+dist_FG_Made    <- ggplot(data = NBA_data) + geom_histogram(aes(FG_Made    ) , bins = 20)
+dist_Threes_Made<- ggplot(data = NBA_data) + geom_histogram(aes(Threes_Made) , bins = 20)
+dist_FT_Made    <- ggplot(data = NBA_data) + geom_histogram(aes(FT_Made    ) , bins = 20)
+dist_FT_per     <- ggplot(data = NBA_data) + geom_histogram(aes(FT_per     ) , bins = 20)
+dist_Rebounds   <- ggplot(data = NBA_data) + geom_histogram(aes(Rebounds   ) , bins = 20)
+dist_Assists    <- ggplot(data = NBA_data) + geom_histogram(aes(Assists    ) , bins = 20)
+dist_Steals     <- ggplot(data = NBA_data) + geom_histogram(aes(Steals     ) , bins = 20)
+dist_Blocks     <- ggplot(data = NBA_data) + geom_histogram(aes(Blocks     ) , bins = 20)
+dist_Turnovers  <- ggplot(data = NBA_data) + geom_histogram(aes(Turnovers  ) , bins = 20)
+dist_Fouls      <- ggplot(data = NBA_data) + geom_histogram(aes(Fouls      ) , bins = 20)
+dist_Height     <- ggplot(data = NBA_data) + geom_histogram(aes(Height     ) , bins = 15)
+dist_Weight     <- ggplot(data = NBA_data) + geom_histogram(aes(Weight     ) , bins = 15)
+dist_Draft_Pick <- ggplot(data = NBA_data) + geom_histogram(aes(Draft_Pick ) , bins = 15)
+```
+
+```{r include=FALSE}
+# appearance
+appearance_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
+  aes(x = log(Appearance + 1), y = log(Salary)) + 
+  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "Salary vs appearances", x = "log(average appearances)", y = "log(Salary)")
+appearance_by_position1 <- ggplot(data = NBA_data) + 
+  aes(x = log(Appearance + 1), y = log(Salary)) + 
+  geom_point(aes(color = Position1), size = .5) + 
+  geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "Salary vs appearances", x = "log(average appearances)", y = "log(Salary)") 
+
+# Rebounds
+Rebounds_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
+  aes(x = log(Rebounds + 1), y = log(Salary)) + 
+  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "Salary vs Rebounds", x = "log(average Rebounds)", y = "log(Salary)")
+Rebounds_by_position1 <- ggplot(data = NBA_data) + 
+  aes(x = log(Rebounds + 1), y = log(Salary)) + 
+  geom_point(aes(color = Position1), size = .5) + 
+  geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "Salary vs Rebounds", x = "log(average Rebounds)", y = "log(Salary)") 
+
+# Assists
+Assists_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
+  aes(x = log(Assists + 1), y = log(Salary)) + 
+  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "Salary vs Assists", x = "log(average Assists)", y = "log(Salary)")
+Assists_by_position1 <- ggplot(data = NBA_data) + 
+  aes(x = log(Assists + 1), y = log(Salary)) + 
+  geom_point(aes(color = Position1), size = .5) + 
+  geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "Salary vs Assists", x = "log(average Assists)", y = "log(Salary)") 
+
+# Steals
+Steals_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
+  aes(x = log(Steals + 1), y = log(Salary)) + 
+  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "Salary vs Steals", x = "log(average Steals)", y = "log(Salary)")
+Steals_by_position1 <- ggplot(data = NBA_data) + 
+  aes(x = log(Steals + 1), y = log(Salary)) + 
+  geom_point(aes(color = Position1), size = .5) + 
+  geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "Salary vs Steals", x = "log(average Steals)", y = "log(Salary)") 
+
+# Blocks
+Blocks_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
+  aes(x = log(Blocks + 1), y = log(Salary)) + 
+  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "Salary vs Blocks", x = "log(average Blocks)", y = "log(Salary)")
+Blocks_by_position1 <- ggplot(data = NBA_data) + 
+  aes(x = log(Blocks + 1), y = log(Salary)) + 
+  geom_point(aes(color = Position1), size = .5) + 
+  geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "Salary vs Blocks", x = "log(average Blocks)", y = "log(Salary)") 
+
+# Fouls - weird result
+Fouls_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
+  aes(x = log(Fouls + 1), y = log(Salary)) + 
+  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "Salary vs Fouls", x = "log(average Fouls)", y = "log(Salary)")
+Fouls_by_position1 <- ggplot(data = NBA_data) + 
+  aes(x = log(Fouls + 1), y = log(Salary)) + 
+  geom_point(aes(color = Position1), size = .5) + 
+  geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "Salary vs Fouls", x = "log(average Fouls)", y = "log(Salary)") 
+
+# Height
+Height_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
+  aes(x = log(Height + 1), y = log(Salary)) + 
+  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "Salary vs Height", x = "log(average Height)", y = "log(Salary)")
+Height_by_position1 <- ggplot(data = NBA_data) + 
+  aes(x = log(Height + 1), y = log(Salary)) + 
+  geom_point(aes(color = Position1), size = .5) + 
+  geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "Salary vs Height", x = "log(average Height)", y = "log(Salary)") 
+
+# Weight
+Weight_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
+  aes(x = log(Weight + 1), y = log(Salary)) + 
+  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "Salary vs Weight", x = "log(average Weight)", y = "log(Salary)")
+Weight_by_position1 <- ggplot(data = NBA_data) + 
+  aes(x = log(Weight + 1), y = log(Salary)) + 
+  geom_point(aes(color = Position1), size = .5) + 
+  geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "Salary vs Weight", x = "log(average Weight)", y = "log(Salary)") 
+
+```
+
+
+
+
+
+https://simpleblitz.com/nba/important-position-basketball/
