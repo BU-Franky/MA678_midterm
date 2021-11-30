@@ -27,6 +27,7 @@ library(lmerTest)
 library(lattice)
 require(gridExtra)
 library(ggplot2)
+library(PerformanceAnalytics)
 ```
 
 ## Abstract
@@ -157,24 +158,23 @@ NBA_data$Position1 <- ifelse((NBA_data$Position == "PF" | NBA_data$Position == "
 
 By aforementioned part, I've got a `NBA_data` with 314 observations and 21 variables, among which there is 1 output `salary` and 20 predictors. However, whether or not to use all of these 20 predictors is depended on following analysis.
 
-```{r echo=FALSE, fig.height=3.5, fig.width=10, fig.cap="relationship between salaries and points of players"}
+```{r echo=FALSE, fig.height=3.6, fig.width=10, fig.cap="relationship between salaries and points of players"}
+set.seed(1)
 team_sample <- sample(unique(NBA_data$Team), 10, replace = FALSE) # random sample 10 from 30 
 # points
 points_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
   aes(x = log(Points + 1), y = log(Salary)) + 
-  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "(a) Salary vs Points", x = "log(average points)", y = "log(Salary)")
 
 points_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Points + 1), y = log(Salary)) + 
-  geom_point(aes(color = Position1), size = .5) + 
+  geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "(b) Salary vs Points", x = "log(average points)", y = "log(Salary)") 
 grid.arrange(points_by_teams, points_by_position1, ncol = 2)
 ```
-
-
 
 Figure 1 illustrates the relationship between salaries and average points, while fig(a) is in team level and fig(b) is in position level. However, whatever the level, salaries show the increasing trend as points going up. And in different teams and positions, the intercepts and slopes show slights differences. After I draw the graph of salaries versus appearance, rebounds, assists, steals and blocks, the figures are quite similar. Thus I put them in the appendix. 
 
@@ -182,12 +182,12 @@ Figure 1 illustrates the relationship between salaries and average points, while
 # Turnovers - weird result
 Turnovers_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
   aes(x = log(Turnovers + 1), y = log(Salary)) + 
-  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "(a) Salary vs Turnovers", x = "log(average Turnovers)", y = "log(Salary)")
 Turnovers_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Turnovers + 1), y = log(Salary)) + 
-  geom_point(aes(color = Position1), size = .5) + 
+  geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "(b) Salary vs Turnovers", x = "log(average Turnovers)", y = "log(Salary)") 
 grid.arrange(Turnovers_by_teams, Turnovers_by_position1, ncol = 2)
@@ -211,15 +211,96 @@ Figure 3 verifies that players' turnovers are closely related with their assists
 # Draft_Pick
 Draft_Pick_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
   aes(x = log(Draft_Pick + 1), y = log(Salary)) + 
-  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "(a) Salary vs Draft_Pick", x = "log(average Draft_Pick)", y = "log(Salary)")
 Draft_Pick_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Draft_Pick + 1), y = log(Salary)) + 
-  geom_point(aes(color = Position1), size = .5) + 
+  geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "(b) Salary vs Draft_Pick", x = "log(average Draft_Pick)", y = "log(Salary)") 
 grid.arrange(Draft_Pick_by_teams, Draft_Pick_by_position1, ncol = 2)
+```
+
+Figure 4 shows that whatever from team or position level, high draft pick players are more favored and usually can get relatively high salary. It is consistent with our intuition that draft pick results reflect the potential of players to some extent. Yet, the slopes and intercepts vary from team to team and that indicate random effects really matter in this case. 
+
+### Model fitting
+
+Since different teams and positions have quite large impacts on the model, I decide to use multilevel model to fit `NBA_data`. As to selection of variables, I also include `three made per game` because under the crazy trendency of small ball, the ability to shoot 3-points is really important. Meanwhile, since all variables are more or less skewed and have heavy tails, I took `log(variable + 1)` to create new ones. All original distribution plots of variables can be found in Appendix of this report. For the next step, I draw the Pearson correlation matrix to do the predictor selection.
+
+```{r include=FALSE}
+log_NBA_data <- NBA_data %>% dplyr::select(Player_Id_Str, Team, Position1, Salary, Appearance, Points,
+                                           Threes_Made, Rebounds, Assists, 
+                                           Steals, Blocks, Height, Draft_Pick) %>% data.frame()
+log_NBA_data$Threes_Made[which(is.nan(log_NBA_data$Threes_Made))] <- 0
+log_NBA_data$Team      <- factor(log_NBA_data$Team)
+log_NBA_data$Position1 <- factor(log_NBA_data$Position1)
+log_NBA_data$Salary      <- log(log_NBA_data$Salary      + 1)
+log_NBA_data$Appearance  <- log(log_NBA_data$Appearance  + 1)
+log_NBA_data$Points      <- log(log_NBA_data$Points      + 1)
+log_NBA_data$Threes_Made <- log(log_NBA_data$Threes_Made + 1)
+log_NBA_data$Rebounds    <- log(log_NBA_data$Rebounds    + 1)
+log_NBA_data$Assists     <- log(log_NBA_data$Assists     + 1)
+log_NBA_data$Steals      <- log(log_NBA_data$Steals      + 1)  # drop
+log_NBA_data$Blocks      <- log(log_NBA_data$Blocks      + 1)  # drop
+log_NBA_data$Height      <- log(log_NBA_data$Height      + 1)
+log_NBA_data$Draft_Pick  <- log(log_NBA_data$Draft_Pick     )
+```
+
+```{r echo=FALSE, fig.height=3, fig.width=7, fig.cap="Correlation Matrix"}
+chart.Correlation(log_NBA_data[, 5: 13], histogram=TRUE, pch=20)
+```
+
+Figure 5 clearly shows Pearson relationship between variables and I use .6 to be a threshold, which indicates variables can be highly related. Since `Points` and `Assists` are two of the most important predictors, we have to keep them anyway. Then, the highest correlation appears between `Assists` & `Steals` and `Blocks` & `Rebounds` as well as `Blocks` & `Height`. Hence, I decided to drop `Rebounds`, `Steals` and `Blocks`. 
+
+```{r include=FALSE}
+model <- lmer(Salary ~ Appearance + Points  + Threes_Made 
+              + Assists  + Height + Draft_Pick 
+              + (1 + Appearance + Points + Threes_Made + Assists + Draft_Pick| Team) 
+              + (1 + Height| Position1),
+              data = log_NBA_data)
+summary(model)
+```
+
+Additionally, as different teams have quite different on-court strategies and seasonal goals, random effect of teams is quite important for variables: `Appearance, Points, Three_Made and Draft Pick`. On the other hand, every position takes its jobs, like point guard is responsible for handling the ball and triggering team's offense, the preferred `Height` are vary from different positions. Thus, I prefer changing slopes and intercepts of `Height` for different ones. Here is the function I built: 
+
+```{r eval=FALSE}
+model <- lmer(Salary ~ Appearance + Points  + Threes_Made 
+              + Assists  + Height + Draft_Pick 
+              + (1 + Appearance + Points + Threes_Made + Assists + Draft_Pick| Team) 
+              + (1 + Height| Position1),
+              data = log_NBA_data)
+```
+
+
+Here is the summary of model(fixed effect) and all variables here are considered as statistically significant at $\alpha$ = 0.5 level.  
+
+```{r include=TRUE, echo=FALSE}
+round(summary(model)$coefficient, digits = 2)
+```
+
+And the following tables are the summary of random effects. The first one is random effect of Team (only display first ten teams alphabetically) and the second one is Positions.
+```{r include=TRUE, echo=FALSE}
+round(ranef(model)$Team, digits = 2)[1:10, ]
+```
+
+```{r include=TRUE, echo=FALSE}
+round(ranef(model)$Position1, digits = 2)
+```
+
+\newpage
+
+## Result
+
+### Interpretation
+
+Let's take Brooklyn Nets Guard for example. Firstly, we are able to get the following formula of fixed effect: 
+$$ log(salary + 1) = -8.95  +  0.26\times log(Appearance + 1) + 0.38 \times log(Points + 1) + 0.30 \times log(ThreesMade + 1) \\ + 0.53 \times log(Assists + 1) + 4.27 * log(Height + 1) - 0.11 \times log(Draft_Pick) $$
+Then
+```{r}
+residul_plot <- plot(model)
+qq_plot      <- qqmath(model)
+grid.arrange(residul_plot, qq_plot, ncol = 2)
 ```
 
 ## Appendix
@@ -249,96 +330,121 @@ dist_Draft_Pick <- ggplot(data = NBA_data) + geom_histogram(aes(Draft_Pick ) , b
 # appearance
 appearance_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
   aes(x = log(Appearance + 1), y = log(Salary)) + 
-  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "Salary vs appearances", x = "log(average appearances)", y = "log(Salary)")
 appearance_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Appearance + 1), y = log(Salary)) + 
-  geom_point(aes(color = Position1), size = .5) + 
+  geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "Salary vs appearances", x = "log(average appearances)", y = "log(Salary)") 
+
+# Threes_per
+Threes_per_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
+  aes(x = log(Threes_per + 1), y = log(Salary)) + 
+  geom_point(aes(color = factor(Team)), size = .6) + 
+  geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "Salary vs Threes_per", x = "log(average Threes_per)", y = "log(Salary)")
+Threes_per_by_position1 <- ggplot(data = NBA_data) + 
+  aes(x = log(Threes_per + 1), y = log(Salary)) + 
+  geom_point(aes(color = Position1), size = .6) + 
+  geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "Salary vs Threes_per", x = "log(average Threes_per)", y = "log(Salary)") 
+
+# Threes_Made
+Threes_Made_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
+  aes(x = log(Threes_Made + 1), y = log(Salary)) + 
+  geom_point(aes(color = factor(Team)), size = .6) + 
+  geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "Salary vs Threes_Made", x = "log(average Threes_Made)", y = "log(Salary)")
+Threes_Made_by_position1 <- ggplot(data = NBA_data) + 
+  aes(x = log(Threes_Made + 1), y = log(Salary)) + 
+  geom_point(aes(color = Position1), size = .6) + 
+  geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
+  labs(title = "Salary vs Threes_Made", x = "log(average Threes_Made)", y = "log(Salary)") 
+
 
 # Rebounds
 Rebounds_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
   aes(x = log(Rebounds + 1), y = log(Salary)) + 
-  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "Salary vs Rebounds", x = "log(average Rebounds)", y = "log(Salary)")
 Rebounds_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Rebounds + 1), y = log(Salary)) + 
-  geom_point(aes(color = Position1), size = .5) + 
+  geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "Salary vs Rebounds", x = "log(average Rebounds)", y = "log(Salary)") 
 
 # Assists
 Assists_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
   aes(x = log(Assists + 1), y = log(Salary)) + 
-  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "Salary vs Assists", x = "log(average Assists)", y = "log(Salary)")
 Assists_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Assists + 1), y = log(Salary)) + 
-  geom_point(aes(color = Position1), size = .5) + 
+  geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "Salary vs Assists", x = "log(average Assists)", y = "log(Salary)") 
 
 # Steals
 Steals_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
   aes(x = log(Steals + 1), y = log(Salary)) + 
-  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "Salary vs Steals", x = "log(average Steals)", y = "log(Salary)")
 Steals_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Steals + 1), y = log(Salary)) + 
-  geom_point(aes(color = Position1), size = .5) + 
+  geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "Salary vs Steals", x = "log(average Steals)", y = "log(Salary)") 
 
 # Blocks
 Blocks_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
   aes(x = log(Blocks + 1), y = log(Salary)) + 
-  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "Salary vs Blocks", x = "log(average Blocks)", y = "log(Salary)")
 Blocks_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Blocks + 1), y = log(Salary)) + 
-  geom_point(aes(color = Position1), size = .5) + 
+  geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "Salary vs Blocks", x = "log(average Blocks)", y = "log(Salary)") 
 
 # Fouls - weird result
 Fouls_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
   aes(x = log(Fouls + 1), y = log(Salary)) + 
-  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "Salary vs Fouls", x = "log(average Fouls)", y = "log(Salary)")
 Fouls_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Fouls + 1), y = log(Salary)) + 
-  geom_point(aes(color = Position1), size = .5) + 
+  geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "Salary vs Fouls", x = "log(average Fouls)", y = "log(Salary)") 
 
 # Height
 Height_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
   aes(x = log(Height + 1), y = log(Salary)) + 
-  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "Salary vs Height", x = "log(average Height)", y = "log(Salary)")
 Height_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Height + 1), y = log(Salary)) + 
-  geom_point(aes(color = Position1), size = .5) + 
+  geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "Salary vs Height", x = "log(average Height)", y = "log(Salary)") 
 
 # Weight
 Weight_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
   aes(x = log(Weight + 1), y = log(Salary)) + 
-  geom_point(aes(color = factor(Team)), size = .5) + 
+  geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "Salary vs Weight", x = "log(average Weight)", y = "log(Salary)")
 Weight_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Weight + 1), y = log(Salary)) + 
-  geom_point(aes(color = Position1), size = .5) + 
+  geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
   labs(title = "Salary vs Weight", x = "log(average Weight)", y = "log(Salary)") 
 
