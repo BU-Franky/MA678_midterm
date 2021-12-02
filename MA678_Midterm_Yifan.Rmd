@@ -295,13 +295,37 @@ round(ranef(model)$Position1, digits = 2)
 ### Interpretation
 
 Let's take Brooklyn Nets Guard for example. Firstly, we are able to get the following formula of fixed effect: 
-$$ log(salary + 1) = -8.95  +  0.26\times log(Appearance + 1) + 0.38 \times log(Points + 1) + 0.30 \times log(ThreesMade + 1) \\ + 0.53 \times log(Assists + 1) + 4.27 * log(Height + 1) - 0.11 \times log(Draft_Pick) $$
-Then
-```{r}
+$$ log(salary + 1) = -8.95  +  0.26\times log(Appearance + 1) + 0.38 \times log(Points + 1) + 0.30 \times log(ThreesMade + 1) \\ + 0.53 \times log(Assists + 1) + 4.27 \times log(Height + 1) - 0.11 \times log(Draft_Pick) $$
+Then add the random effect of Brooklyn Nets Guard's random effect to the intercepts and slopes and get the estimated formula: 
+$$ log(salary + 1) = -10.94 + 0.16 \times log(Appearance + 1) + 0.78 \times log(Points + 1) + 0.29 \times log(ThreesMade + 1) \\ + 0.57 \times log(Assists + 1) + 4.25 \times log(Height + 1) + 0.17 \times log(Draft_Pick)$$
+```{r include=FALSE}
+predict <- exp(predict(model, newdata = log_NBA_data)) - 1
+NBA_data$Prediction <- predict
+subset(NBA_data, Player_Id_Str == "james-harden")
+```
+In the formula, all the parameters are positive except `Draft_Pick`, which indicates they all hvae positve impact on players' salaries. And then look at `Draft_Pick`, it's known to all that the smaller the draft ranking, the larger potential the player being estimated. Thus it's reasonable that the parameter of `Draft_Pick` is negative. Go back to the model, for every increase 1% of player's points, the prediction of salary is 0.78% for Brooklyn Nets' guard line. Of course, as different teams have different on-court characteristics, the favors of players are different, which means all the parameters are changing from team to team. 
+
+On top of this, what we can find is that the intercept of Brooklyn Nets players' salaries is far lower then nearly all other teams (-10.94), and this is really understandable because the style of this team is a typical `Big 3` mode, which means over 85% salaries are paid for three super scorers (Kevin Durant, James Harden and Kyrie Irving) and salaries of other rotations are relatively low. Meanwhile, this exactly answers the question why the `Points` parameter of Brooklyn Nets reaches scaring 0.78, far higher then other teams. 
+
+What's more, let's take Brooklyn nets all-star guards James Harden for example and input his data into the formula. Then under this model, the prediction salary is 34.46 million dollars and the actual value is 41.25 million. 
+
+### Model Checking
+
+```{r echo=FALSE, fig.height=2.5, fig.width=5, fig.cap="Residual plot and Q-Q plot."}
 residul_plot <- plot(model)
 qq_plot      <- qqmath(model)
 grid.arrange(residul_plot, qq_plot, ncol = 2)
 ```
+
+The left plot of Figure 6 is residual plot and the right one is residual Q-Q plot. According to it, the mean value of residuals is approximately 0. Yet as the fitted value close to 0, there's no negative residuals. This phenomenon can be explained by the model we use because we transformed all variables by `log(variable + 1)`. As for Q-Q plot in Figure 6, majority points except tail ones are on the normal distribution line, thus the normality check is acceptable. 
+
+## Discussion
+
+In this report, multilevel model is used to figure out the relationship between players' salaries and their several basic on-court stats as well as their draft rankings. Also, this model take two kinds of group level into consideration: players' teams and players' position. Generally, from the perspective of fixed effects, all the predictors have positive impacts on players' salaries. For instance, during 2017-2020 seasons, the higher average points (assists, draft ranking and so on) the player scored the higher the estimation of his annual salary by this model. In addition, both in team and position level, the random effects sound reasonable, which means the results can be explained by the characteristics of teams or positions. Finally, several model checks are also good and support the validity of the model.
+
+This report also has some limitations. Firstly, the data set I built needed to be considered more carefully. Although I have considered about the lagging of players' salaries, like the contract the player signed were depended on the performance of years before that, the contract years of players are actually different. Thus the selection of same performance period (2017-2020) might not fair for all players. Additionally, I have already managed to reduce the effects of correlations between predictors by dropping out highly related ones but there still exists over 0.5 Pearson correlation pairs. For the further work, I plan to involve `PCA` to handle high correlated predictors first and then fit multilevel model. 
+
+On top of this, our model is under the assumption that the players' salaries is mostly decided by whether their talents are suitable for current NBA basketball style, whatever name them as `samll ball` or `fast paced`. And it's known to all that the luxury cap of NBA has dramatically increased during the past years, which means average income of players has inflated. So it's might not be fair to compare the current income of player since for some their contracts were signed several years ago and some are newly signed and that might not be consistent with players' abilities.
 
 ## Appendix
 
