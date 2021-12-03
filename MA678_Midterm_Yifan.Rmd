@@ -28,6 +28,7 @@ library(lattice)
 require(gridExtra)
 library(ggplot2)
 library(PerformanceAnalytics)
+library(rstanarm)
 ```
 
 ## Abstract
@@ -311,7 +312,7 @@ What's more, let's take Brooklyn nets all-star guards James Harden for example a
 
 ### Model Checking
 
-```{r echo=FALSE, fig.height=2.5, fig.width=5, fig.cap="Residual plot and Q-Q plot."}
+```{r echo=FALSE, fig.height=4, fig.width=8, fig.cap="Residual plot and Q-Q plot."}
 residul_plot <- plot(model)
 qq_plot      <- qqmath(model)
 grid.arrange(residul_plot, qq_plot, ncol = 2)
@@ -327,28 +328,50 @@ This report also has some limitations. Firstly, the data set I built needed to b
 
 On top of this, our model is under the assumption that the players' salaries is mostly decided by whether their talents are suitable for current NBA basketball style, whatever name them as `samll ball` or `fast paced`. And it's known to all that the luxury cap of NBA has dramatically increased during the past years, which means average income of players has inflated. So it's might not be fair to compare the current income of player since for some their contracts were signed several years ago and some are newly signed and that might not be consistent with players' abilities.
 
+## Reference
+[1] Micheal, C. _Mixed Models with R_. https://m-clark.github.io/mixed-models-with-R/
+
+[2] Roy, K. (2021, July 1). _What is the most important position in basketball?_. https://simpleblitz.com/nba/important-position-basketball/
+
+\newpage
+
 ## Appendix
+
+### Variable distributions
 
 ```{r include=FALSE}
 # Exploratory Data Analysis
-dist_Salary     <- ggplot(data = NBA_data) + geom_histogram(aes(Salary     ) , bins = 30)
-dist_Minutes    <- ggplot(data = NBA_data) + geom_histogram(aes(Minutes    ) , bins = 30)
-dist_Appearance <- ggplot(data = NBA_data) + geom_histogram(aes(Appearance ) , bins = 30)
-dist_Points     <- ggplot(data = NBA_data) + geom_histogram(aes(Points     ) , bins = 30)
-dist_FG_Made    <- ggplot(data = NBA_data) + geom_histogram(aes(FG_Made    ) , bins = 20)
-dist_Threes_Made<- ggplot(data = NBA_data) + geom_histogram(aes(Threes_Made) , bins = 20)
-dist_FT_Made    <- ggplot(data = NBA_data) + geom_histogram(aes(FT_Made    ) , bins = 20)
-dist_FT_per     <- ggplot(data = NBA_data) + geom_histogram(aes(FT_per     ) , bins = 20)
-dist_Rebounds   <- ggplot(data = NBA_data) + geom_histogram(aes(Rebounds   ) , bins = 20)
-dist_Assists    <- ggplot(data = NBA_data) + geom_histogram(aes(Assists    ) , bins = 20)
-dist_Steals     <- ggplot(data = NBA_data) + geom_histogram(aes(Steals     ) , bins = 20)
-dist_Blocks     <- ggplot(data = NBA_data) + geom_histogram(aes(Blocks     ) , bins = 20)
-dist_Turnovers  <- ggplot(data = NBA_data) + geom_histogram(aes(Turnovers  ) , bins = 20)
-dist_Fouls      <- ggplot(data = NBA_data) + geom_histogram(aes(Fouls      ) , bins = 20)
-dist_Height     <- ggplot(data = NBA_data) + geom_histogram(aes(Height     ) , bins = 15)
-dist_Weight     <- ggplot(data = NBA_data) + geom_histogram(aes(Weight     ) , bins = 15)
-dist_Draft_Pick <- ggplot(data = NBA_data) + geom_histogram(aes(Draft_Pick ) , bins = 15)
+dist_Salary     <- ggplot(data=NBA_data,aes(x=Salary     ))+geom_histogram(aes(y=..density..),bins=30,fill="#999999")+geom_density(lwd=1,alpha=.4,fill="#999999")+labs(title="Salary     ")
+dist_Minutes    <- ggplot(data=NBA_data,aes(x=Minutes    ))+geom_histogram(aes(y=..density..),bins=30,fill="#E69F00")+geom_density(lwd=1,alpha=.4,fill="#E69F00")+labs(title="Minutes    ")
+dist_Appearance <- ggplot(data=NBA_data,aes(x=Appearance ))+geom_histogram(aes(y=..density..),bins=30,fill="#56B4E9")+geom_density(lwd=1,alpha=.4,fill="#56B4E9")+labs(title="Appearance ")
+dist_Points     <- ggplot(data=NBA_data,aes(x=Points     ))+geom_histogram(aes(y=..density..),bins=30,fill="#009E73")+geom_density(lwd=1,alpha=.4,fill="#009E73")+labs(title="Points     ")
+dist_FG_Made    <- ggplot(data=NBA_data,aes(x=FG_Made    ))+geom_histogram(aes(y=..density..),bins=20,fill="#F0E442")+geom_density(lwd=1,alpha=.4,fill="#F0E442")+labs(title="FG_Made    ")
+dist_Threes_Made<- ggplot(data=NBA_data,aes(x=Threes_Made))+geom_histogram(aes(y=..density..),bins=20,fill="#0072B2")+geom_density(lwd=1,alpha=.4,fill="#0072B2")+labs(title="Threes_Made")
+dist_FT_Made    <- ggplot(data=NBA_data,aes(x=FT_Made    ))+geom_histogram(aes(y=..density..),bins=20,fill="#D55E00")+geom_density(lwd=1,alpha=.4,fill="#D55E00")+labs(title="FT_Made    ")
+dist_FT_per     <- ggplot(data=NBA_data,aes(x=FT_per     ))+geom_histogram(aes(y=..density..),bins=20,fill="#CC79A7")+geom_density(lwd=1,alpha=.4,fill="#CC79A7")+labs(title="FT_per     ")
+dist_Rebounds   <- ggplot(data=NBA_data,aes(x=Rebounds   ))+geom_histogram(aes(y=..density..),bins=20,fill="#000000")+geom_density(lwd=1,alpha=.4,fill="#000000")+labs(title="Rebounds   ")
+dist_Assists    <- ggplot(data=NBA_data,aes(x=Assists    ))+geom_histogram(aes(y=..density..),bins=20,fill="#E69F00")+geom_density(lwd=1,alpha=.4,fill="#E69F00")+labs(title="Assists    ")
+dist_Steals     <- ggplot(data=NBA_data,aes(x=Steals     ))+geom_histogram(aes(y=..density..),bins=20,fill="#56B4E9")+geom_density(lwd=1,alpha=.4,fill="#56B4E9")+labs(title="Steals     ")
+dist_Blocks     <- ggplot(data=NBA_data,aes(x=Blocks     ))+geom_histogram(aes(y=..density..),bins=20,fill="#009E73")+geom_density(lwd=1,alpha=.4,fill="#009E73")+labs(title="Blocks     ")
+dist_Turnovers  <- ggplot(data=NBA_data,aes(x=Turnovers  ))+geom_histogram(aes(y=..density..),bins=20,fill="#F0E442")+geom_density(lwd=1,alpha=.4,fill="#F0E442")+labs(title="Turnovers  ")
+dist_Fouls      <- ggplot(data=NBA_data,aes(x=Fouls      ))+geom_histogram(aes(y=..density..),bins=20,fill="#0072B2")+geom_density(lwd=1,alpha=.4,fill="#0072B2")+labs(title="Fouls      ")
+dist_Height     <- ggplot(data=NBA_data,aes(x=Height     ))+geom_histogram(aes(y=..density..),bins=15,fill="#D55E00")+geom_density(lwd=1,alpha=.4,fill="#D55E00")+labs(title="Height     ")
+dist_Weight     <- ggplot(data=NBA_data,aes(x=Weight     ))+geom_histogram(aes(y=..density..),bins=15,fill="#CC79A7")+geom_density(lwd=1,alpha=.4,fill="#CC79A7")+labs(title="Weight     ")
+dist_Draft_Pick <- ggplot(data=NBA_data,aes(x=Draft_Pick ))+geom_histogram(aes(y=..density..),bins=15,fill="#0F9999")+geom_density(lwd=1,alpha=.4,fill="#0F9999")+labs(title="Draft_Pick ")
 ```
+
+```{r echo=FALSE, fig.height=4, fig.width=9, fig.cap="EDA: distribution plots (1)"}
+grid.arrange(dist_Salary, dist_Minutes, dist_Appearance, dist_Points, dist_FG_Made, dist_Threes_Made, ncol = 3, nrow = 2)
+```
+
+```{r echo=FALSE, fig.height=4, fig.width=9, fig.cap="EDA: distribution plots (2)"}
+grid.arrange(dist_FT_Made, dist_FT_per, dist_Rebounds, dist_Assists, dist_Steals, dist_Blocks, ncol = 3, nrow = 2)
+```
+
+```{r echo=FALSE, fig.height=4, fig.width=9, fig.cap="EDA: distribution plots (3)"}
+grid.arrange(dist_Turnovers, dist_Fouls, dist_Height, dist_Weight, dist_Draft_Pick, ncol = 3, nrow = 2)
+```
+
 
 ```{r include=FALSE}
 # appearance
@@ -356,36 +379,36 @@ appearance_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) +
   aes(x = log(Appearance + 1), y = log(Salary)) + 
   geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
-  labs(title = "Salary vs appearances", x = "log(average appearances)", y = "log(Salary)")
+  labs(title = "Salary vs appearances", x = "log(average appearances)", y = "log(Salary)") + theme(legend.position = "none")
 appearance_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Appearance + 1), y = log(Salary)) + 
   geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
-  labs(title = "Salary vs appearances", x = "log(average appearances)", y = "log(Salary)") 
+  labs(title = "Salary vs appearances", x = "log(average appearances)", y = "log(Salary)")  + theme(legend.position = "none")
 
 # Threes_per
 Threes_per_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
   aes(x = log(Threes_per + 1), y = log(Salary)) + 
   geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
-  labs(title = "Salary vs Threes_per", x = "log(average Threes_per)", y = "log(Salary)")
+  labs(title = "Salary vs Threes_per", x = "log(average Threes_per)", y = "log(Salary)") + theme(legend.position = "none")
 Threes_per_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Threes_per + 1), y = log(Salary)) + 
   geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
-  labs(title = "Salary vs Threes_per", x = "log(average Threes_per)", y = "log(Salary)") 
+  labs(title = "Salary vs Threes_per", x = "log(average Threes_per)", y = "log(Salary)")  + theme(legend.position = "none")
 
 # Threes_Made
 Threes_Made_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
   aes(x = log(Threes_Made + 1), y = log(Salary)) + 
   geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
-  labs(title = "Salary vs Threes_Made", x = "log(average Threes_Made)", y = "log(Salary)")
+  labs(title = "Salary vs Threes_Made", x = "log(average Threes_Made)", y = "log(Salary)") + theme(legend.position = "none")
 Threes_Made_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Threes_Made + 1), y = log(Salary)) + 
   geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
-  labs(title = "Salary vs Threes_Made", x = "log(average Threes_Made)", y = "log(Salary)") 
+  labs(title = "Salary vs Threes_Made", x = "log(average Threes_Made)", y = "log(Salary)")  + theme(legend.position = "none")
 
 
 # Rebounds
@@ -393,89 +416,104 @@ Rebounds_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) +
   aes(x = log(Rebounds + 1), y = log(Salary)) + 
   geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
-  labs(title = "Salary vs Rebounds", x = "log(average Rebounds)", y = "log(Salary)")
+  labs(title = "Salary vs Rebounds", x = "log(average Rebounds)", y = "log(Salary)") + theme(legend.position = "none")
 Rebounds_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Rebounds + 1), y = log(Salary)) + 
   geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
-  labs(title = "Salary vs Rebounds", x = "log(average Rebounds)", y = "log(Salary)") 
+  labs(title = "Salary vs Rebounds", x = "log(average Rebounds)", y = "log(Salary)")  + theme(legend.position = "none")
 
 # Assists
 Assists_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
   aes(x = log(Assists + 1), y = log(Salary)) + 
   geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
-  labs(title = "Salary vs Assists", x = "log(average Assists)", y = "log(Salary)")
+  labs(title = "Salary vs Assists", x = "log(average Assists)", y = "log(Salary)") + theme(legend.position = "none")
 Assists_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Assists + 1), y = log(Salary)) + 
   geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
-  labs(title = "Salary vs Assists", x = "log(average Assists)", y = "log(Salary)") 
+  labs(title = "Salary vs Assists", x = "log(average Assists)", y = "log(Salary)")  + theme(legend.position = "none")
 
 # Steals
 Steals_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
   aes(x = log(Steals + 1), y = log(Salary)) + 
   geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
-  labs(title = "Salary vs Steals", x = "log(average Steals)", y = "log(Salary)")
+  labs(title = "Salary vs Steals", x = "log(average Steals)", y = "log(Salary)") + theme(legend.position = "none")
 Steals_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Steals + 1), y = log(Salary)) + 
   geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
-  labs(title = "Salary vs Steals", x = "log(average Steals)", y = "log(Salary)") 
+  labs(title = "Salary vs Steals", x = "log(average Steals)", y = "log(Salary)")  + theme(legend.position = "none")
 
 # Blocks
 Blocks_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
   aes(x = log(Blocks + 1), y = log(Salary)) + 
   geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
-  labs(title = "Salary vs Blocks", x = "log(average Blocks)", y = "log(Salary)")
+  labs(title = "Salary vs Blocks", x = "log(average Blocks)", y = "log(Salary)") + theme(legend.position = "none")
 Blocks_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Blocks + 1), y = log(Salary)) + 
   geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
-  labs(title = "Salary vs Blocks", x = "log(average Blocks)", y = "log(Salary)") 
+  labs(title = "Salary vs Blocks", x = "log(average Blocks)", y = "log(Salary)")  + theme(legend.position = "none")
 
 # Fouls - weird result
 Fouls_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
   aes(x = log(Fouls + 1), y = log(Salary)) + 
   geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
-  labs(title = "Salary vs Fouls", x = "log(average Fouls)", y = "log(Salary)")
+  labs(title = "Salary vs Fouls", x = "log(average Fouls)", y = "log(Salary)") + theme(legend.position = "none")
 Fouls_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Fouls + 1), y = log(Salary)) + 
   geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
-  labs(title = "Salary vs Fouls", x = "log(average Fouls)", y = "log(Salary)") 
+  labs(title = "Salary vs Fouls", x = "log(average Fouls)", y = "log(Salary)")  + theme(legend.position = "none")
 
 # Height
 Height_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
   aes(x = log(Height + 1), y = log(Salary)) + 
   geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
-  labs(title = "Salary vs Height", x = "log(average Height)", y = "log(Salary)")
+  labs(title = "Salary vs Height", x = "log(average Height)", y = "log(Salary)") + theme(legend.position = "none")
 Height_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Height + 1), y = log(Salary)) + 
   geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
-  labs(title = "Salary vs Height", x = "log(average Height)", y = "log(Salary)") 
+  labs(title = "Salary vs Height", x = "log(average Height)", y = "log(Salary)") + theme(legend.position = "none")
 
 # Weight
 Weight_by_teams <- ggplot(data = subset(NBA_data, Team %in% team_sample)) + 
   aes(x = log(Weight + 1), y = log(Salary)) + 
   geom_point(aes(color = factor(Team)), size = .6) + 
   geom_smooth(aes(color = factor(Team)), method = "lm", se = FALSE, formula = 'y ~ x') + 
-  labs(title = "Salary vs Weight", x = "log(average Weight)", y = "log(Salary)")
+  labs(title = "Salary vs Weight", x = "log(average Weight)", y = "log(Salary)") + theme(legend.position = "none")
 Weight_by_position1 <- ggplot(data = NBA_data) + 
   aes(x = log(Weight + 1), y = log(Salary)) + 
   geom_point(aes(color = Position1), size = .6) + 
   geom_smooth(aes(color = Position1), method = "lm", se = FALSE, formula = 'y ~ x') + 
-  labs(title = "Salary vs Weight", x = "log(average Weight)", y = "log(Salary)") 
+  labs(title = "Salary vs Weight", x = "log(average Weight)", y = "log(Salary)") + theme(legend.position = "none")
+```
 
+```{r echo=FALSE, fig.height=4, fig.width=6, fig.cap="EDA: random effects of teama and positions(1)"}
+grid.arrange(appearance_by_teams, appearance_by_position1, Rebounds_by_teams, Rebounds_by_position1, ncol=2)
+```
+
+```{r echo=FALSE, fig.height=4, fig.width=6, fig.cap="EDA: random effects of teama and positions(2)"}
+grid.arrange(Threes_per_by_teams, Threes_per_by_position1, Threes_Made_by_teams, Threes_Made_by_position1, ncol=2)
+```
+
+```{r echo=FALSE, fig.height=4, fig.width=6, fig.cap="EDA: random effects of teama and positions(3)"}
+grid.arrange(Assists_by_teams, Assists_by_position1, Steals_by_teams, Assists_by_position1, ncol=2)
+```
+
+```{r echo=FALSE, fig.height=4, fig.width=6, fig.cap="EDA: random effects of teama and positions(4)"}
+grid.arrange(Steals_by_teams, Steals_by_position1, Blocks_by_teams, Blocks_by_position1, ncol=2)
+```
+
+```{r echo=FALSE, fig.height=4, fig.width=6, fig.cap="EDA: random effects of teama and positions(5)"}
+grid.arrange(Height_by_teams, Height_by_position1, Weight_by_teams, Weight_by_position1, ncol=2)
 ```
 
 
-
-
-
-https://simpleblitz.com/nba/important-position-basketball/
