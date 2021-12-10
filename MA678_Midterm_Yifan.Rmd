@@ -29,23 +29,31 @@ require(gridExtra)
 library(ggplot2)
 library(PerformanceAnalytics)
 library(rstanarm)
+library(merTools)
 ```
 
 ## Abstract
 
-The National Basketball Association (NBA) is a professional basketball league in North America, which is absolutely the premier men's professional basketball league in the world. However, in 2020-2021 season, the highest paid player is Golden States top star, Stephen Curry, who earned a salary over $43,000,000 while the lowest paid player's salary is around $150,000. Thus, here comes the problem: which kind of players is favored most in NBA currently or which kind of players can sign a big NBA contract. 
+The National Basketball Association (NBA) is a professional basketball league in North America, which is absolutely the premier men's professional basketball league in the world. However, in 2020-2021 season, the highest paid player is Golden States Warriors' top star, Stephen Curry, who earned a salary over $43,000,000 while the lowest paid player's salary is around $150,000. Thus, here comes the problem: which kind of players is favored most in NBA currently or which kind of players is more likely to sign big contracts. To figure out this problem, I built a multilevel model with group level `Team` and `Position`. The result indicates that different team prefer different kind of players, e.g. Brooklyn Nets prefers to spend majority of money on super scorer but Philadelphia 76ers is willing to spend heavily to hire 3 point shooters. This report can be divided into 4 main parts: Introduction, Method, Result, and Disscusion. 
 
 ## Introduction
 
 Usually, boxed score is important description of  performance of players(e.g. points, rebounds, assists and so on) and whether a player can sign a big contract is greatly decided by it. Nevertheless, different stages of NBA development seem to have different "most important" positions. For example, during a relatively long period, a truly dominant center could simply dominate the game, like Kareem Abdul-Jabbar and Wilt Chamberlain who could score almost ever time he touched the ball. Then, as Michael Jordan dominated 1990s and won 6 NBA championships, he undoubtedly led a wave of shooting guard. Recently, Warrior's Death lineup was too dominant that nearly the whole league was reorienting around to compete with Hampton Five. Thus, the combo guards with great offensive ability (e.g. Stephen Curry, James Harden, Russell Westbrook) or small forwards(e.g. Lebron James, Kevin Durant and Kawhi Leonard) are absolutely most favored in NBA and have the biggest chance to earn a fairly high salary. 
-On the other hand, the luxury tax threshold is $136,606 million and meanwhile, some teams are willing to take risk of paying high tax luxury to form a better lineup and chase championship while some teams not. It's natural to come to the conclusion that players in big franchise teams are more likely to receive higher salaries. That to say, team is another factor we should take into account.  
+
+On the other hand, currently, the luxury tax threshold is $136,606 million. Meanwhile, some teams are willing to take risk of paying high tax luxury to form a better lineup and chase championship while some teams not. It's natural to come to the conclusion that players in big franchise teams are more likely to receive higher salaries. That to say, team is another factor we should take into account.  
 Therefore, I decide to introduce multilevel models to find out the influences of fixed effects (e.g. points, rebounds, assists and so on) and random effects (teams, positions). 
+
+\newpage
 
 ## Methods
 
 ### Data Preprocessing
 
-I found the data set from a public github repository(https://github.com/MattC137/Open_Data/tree/master/Data/Sports/NBA). Firstly, I download 2017-2020 box score and 2021 players information because the players' 2021 salaries are greatly depended on their performances in recent years. Hence, I need to combine them and create the appropriate data frame. Additionally, as the box data is by individual games, after combining the data, I calculate average game statistics(non-Playoff games) for each player and transform `played` information to binary factor (0 or 1) then calculate average `appearances` for each player in non-Playoff games. Additionally, to avoid the bias that some players are labelled with f (forward) and g (guard) while some are labelled more specific with SF, PF, SG, PG, I combined the levels and used foward and guard identically. For the next step, I wiped out 'NA' data in players' information and merge it with aforementioned data frame. Up till now, I get full information of 314 players,which means 11 players for each team on average. Here is the glossary of terms: 
+I found the data set from a public github repository(https://github.com/MattC137/Open_Data/tree/master/Data/Sports/NBA). 
+
+Firstly, I download 2017-2020 box score and 2021 players information because the players' 2021 salaries are greatly depended on their performances in recent years. Hence, I need to combine them and create the appropriate data frame. Additionally, as the box data is by individual games, after combining the data, I calculate average game statistics(non-Playoff games) for each player and transform `played` information to binary factor (0 or 1) then calculate average `appearances` for each player in non-Playoff games. 
+
+Additionally, to avoid the bias that some players are labelled with f (forward) and g (guard) while some are labelled more specific with SF, PF, SG, PG, I combined the levels and used foward and guard identically. For the next step, I wiped out 'NA' data in players' information and merge it with aforementioned data frame. Up till now, I get full information of 314 players,which means 11 players for each team on average. Here is the glossary of terms: 
 
 | column names      | explanation                                     |
 | :--:              | :-----                                          |
@@ -72,6 +80,8 @@ I found the data set from a public github repository(https://github.com/MattC137
 | Height            | Height of player (foot)                         |
 | weight            | Weight of player (lb)                           |
 | Draft_Pick        | Draft pick of player                            |
+
+\newpage
 
 ### Exploratory Data Analysis
 
@@ -248,7 +258,7 @@ log_NBA_data$Height      <- log(log_NBA_data$Height      + 1)
 log_NBA_data$Draft_Pick  <- log(log_NBA_data$Draft_Pick     )
 ```
 
-```{r echo=FALSE, fig.height=3, fig.width=7, fig.cap="Correlation Matrix"}
+```{r echo=FALSE, fig.height=5, fig.width=7, fig.cap="Correlation Matrix"}
 chart.Correlation(log_NBA_data[, 5: 13], histogram=TRUE, pch=20)
 ```
 
@@ -274,10 +284,20 @@ model <- lmer(Salary ~ Appearance + Points  + Threes_Made
 ```
 
 
-Here is the summary of model(fixed effect) and all variables here are considered as statistically significant at $\alpha$ = 0.5 level.  
+Here is the summary of model(fixed effect) and all variables here are considered as statistically significant at $\alpha$ = 0.5 level. To be more clear, a fixed effect parameters are also include in figure 6
 
-```{r include=TRUE, echo=FALSE}
-round(summary(model)$coefficient, digits = 2)
+|                |Estimate   |Std. Error  |df        |t value |Pr(>&#124;t&#124;) |
+|:---:           |:---:      |:---:       |:---:     |:---:   |:---:              |
+|(Intercept)     |-8.95      |2.61        |170.88    |-3.43   |0.00 ***           |
+|log_Appearance  |0.26       |0.06        |92.88     |4.61    |0.00 ***           |
+|log_Points      |0.38       |0.14        |42.68     |2.63    |0.01 *             |
+|log_Threes_Made |0.30       |0.13        |72.08     |2.34    |0.02 *             |
+|log_Assists     |0.53       |0.13        |56.82     |4.13    |0.00 ***           |
+|log_Height      |4.27       |1.29        |177.11    |3.31    |0.00 **            |
+|log_Draft_Pick  |-0.11      |0.05        |28.37     |-2.21   |0.04 *             |
+
+```{r echo=FALSE, fig.height=4, fig.width=6, fig.cap="Fixed Effect of NBA Model"}
+plotFEsim(FEsim(model, n.sims = 100), level = 0.9, stat = 'median', intercept = FALSE)
 ```
 
 And the following tables are the summary of random effects. The first one is random effect of Team (only display first ten teams alphabetically) and the second one is Positions.
@@ -289,6 +309,19 @@ round(ranef(model)$Team, digits = 2)[1:10, ]
 round(ranef(model)$Position1, digits = 2)
 ```
 
+Additionally, a random effect plot for `Team` level are included. From upper left plot of Picture 7, we can come to the conclusion that baseline of salary for each team are quite different. This exactly verify that championship team are willing to pay more money even over the luxury cap. Another parameter that differs most is `Points`, which means scorers suits tastes of some team while not for others. 
+
+```{r echo=FALSE, fig.height=5, fig.width=8, fig.cap="Random Effect of NBA Model"}
+Team_level <- REsim(model, n.sims = 1000) %>% filter(groupFctr == "Team")
+# unique(Team_level$term); 
+Team_level$term <- factor(Team_level$term); Team_level$groupID <- factor(Team_level$groupID)
+ggplot(Team_level) + 
+  geom_pointrange(aes(x = groupID, y = mean, ymax = mean+2*sd, ymin = mean-2*sd, group = term, color = term)) +
+  facet_wrap(~term, ncol = 3) + ylab("Random Effect") + xlab("Team") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 7)) + theme(legend.position = "none")
+```
+
+
 \newpage
 
 ## Result
@@ -296,15 +329,18 @@ round(ranef(model)$Position1, digits = 2)
 ### Interpretation
 
 Let's take Brooklyn Nets Guard for example. Firstly, we are able to get the following formula of fixed effect: 
-$$ log(salary + 1) = -8.95  +  0.26\times log(Appearance + 1) + 0.38 \times log(Points + 1) + 0.30 \times log(ThreesMade + 1) \\ + 0.53 \times log(Assists + 1) + 4.27 \times log(Height + 1) - 0.11 \times log(Draft_Pick) $$
+$$ log(salary + 1) = -8.95  +  0.26\times log(Appearance + 1) + 0.38 \times log(Points + 1) + 0.30 \times log(ThreesMade + 1) $$ 
+$$ + 0.53 \times log(Assists + 1) + 4.27 \times log(Height + 1) - 0.11 \times log(Draft_Pick) $$
 Then add the random effect of Brooklyn Nets Guard's random effect to the intercepts and slopes and get the estimated formula: 
-$$ log(salary + 1) = -10.94 + 0.16 \times log(Appearance + 1) + 0.78 \times log(Points + 1) + 0.29 \times log(ThreesMade + 1) \\ + 0.57 \times log(Assists + 1) + 4.25 \times log(Height + 1) + 0.17 \times log(Draft_Pick)$$
+$$ log(salary + 1) = -10.94 + 0.16 \times log(Appearance + 1) + 0.78 \times log(Points + 1) + 0.29 \times log(ThreesMade + 1) $$ 
+$$ + 0.57 \times log(Assists + 1) + 4.25 \times log(Height + 1) + 0.17 \times log(Draft_Pick)$$
 ```{r include=FALSE}
 predict <- exp(predict(model, newdata = log_NBA_data)) - 1
 NBA_data$Prediction <- predict
 subset(NBA_data, Player_Id_Str == "james-harden")
+ranef <- round(ranef(model)$Team, digits = 2)
 ```
-In the formula, all the parameters are positive except `Draft_Pick`, which indicates they all hvae positve impact on players' salaries. And then look at `Draft_Pick`, it's known to all that the smaller the draft ranking, the larger potential the player being estimated. Thus it's reasonable that the parameter of `Draft_Pick` is negative. Go back to the model, for every increase 1% of player's points, the prediction of salary is 0.78% for Brooklyn Nets' guard line. Of course, as different teams have different on-court characteristics, the favors of players are different, which means all the parameters are changing from team to team. 
+In the formula, all the parameters are positive except `Draft_Pick`, which indicates they all have positive impacts on players' salaries. And then look at `Draft_Pick`, it's known to all that the smaller the draft ranking, the larger potential the player being estimated. Thus it's reasonable that the parameter of `Draft_Pick` is negative. Go back to the model, for every increase 1% of player's points, the prediction of salary is 0.78% for Brooklyn Nets' guard line. Of course, as different teams have different on-court characteristics, the favors of players are different, which means all the parameters are changing from team to team. 
 
 On top of this, what we can find is that the intercept of Brooklyn Nets players' salaries is far lower then nearly all other teams (-10.94), and this is really understandable because the style of this team is a typical `Big 3` mode, which means over 85% salaries are paid for three super scorers (Kevin Durant, James Harden and Kyrie Irving) and salaries of other rotations are relatively low. Meanwhile, this exactly answers the question why the `Points` parameter of Brooklyn Nets reaches scaring 0.78, far higher then other teams. 
 
@@ -318,7 +354,7 @@ qq_plot      <- qqmath(model)
 grid.arrange(residul_plot, qq_plot, ncol = 2)
 ```
 
-The left plot of Figure 6 is residual plot and the right one is residual Q-Q plot. According to it, the mean value of residuals is approximately 0. Yet as the fitted value close to 0, there's no negative residuals. This phenomenon can be explained by the model we use because we transformed all variables by `log(variable + 1)`. As for Q-Q plot in Figure 6, majority points except tail ones are on the normal distribution line, thus the normality check is acceptable. 
+The left plot of Figure 8 is residual plot and the right one is residual Q-Q plot. According to it, the mean value of residuals is approximately 0. Yet as the fitted value close to 0, there's no negative residuals. This phenomenon can be explained by there exists clear lower bound for actual salary and when we make prediction with multilevel model, that would not happen. As for Q-Q plot in Figure 8, majority points except tail ones are on the normal distribution line, thus the normality check is acceptable. 
 
 ## Discussion
 
@@ -332,6 +368,11 @@ On top of this, our model is under the assumption that the players' salaries is 
 [1] Micheal, C. _Mixed Models with R_. https://m-clark.github.io/mixed-models-with-R/
 
 [2] Roy, K. (2021, July 1). _What is the most important position in basketball?_. https://simpleblitz.com/nba/important-position-basketball/
+
+[3] Micheal, P. _Chapter 18: Testing the Assumptions of Multilevel Models_. 
+https://ademos.people.uic.edu/Chapter18.html
+
+
 
 \newpage
 
